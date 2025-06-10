@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pesan Digital - DApp 3D</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono:wght@300;400&display=swap" rel="stylesheet">
+    
+    <!-- Impor Library Three.js dan Ethers.js dari CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+
+    <style>
+        /* CSS Kustom - Tema Gelap Elegan Tanpa Tailwind */
+        :root {
+            --bg-color: #0d0d1a;
+            --primary-color: #2a2a4a;
+            --secondary-color: #4a4a7a;
+            --accent-color: #00f2ff;
+            --text-color: #e0e0f0;
+            --font-title: 'Orbitron', sans-serif;
+            --font-body: 'Roboto Mono', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden; /* Mencegah scrollbar dari UI utama */
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        #app-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .glass-panel {
+            background: rgba(13, 13, 26, 0.7);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 242, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        header h1 {
+            font-family: var(--font-title);
+            font-size: 2.5rem;
+            text-align: center;
+            color: var(--accent-color);
+            text-shadow: 0 0 10px var(--accent-color);
+        }
+
+        #connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ff4d4d; /* Merah = disconnected */
+            transition: background-color 0.5s;
+            box-shadow: 0 0 8px #ff4d4d;
+        }
+
+        .status-dot.connected {
+            background-color: #4dff4d; /* Hijau = connected */
+            box-shadow: 0 0 8px #4dff4d;
+        }
+
+        #display-section {
+            text-align: center;
+        }
+
+        #display-section h2 {
+            font-family: var(--font-title);
+            margin-bottom: 1rem;
+            color: #b0b0d0;
+        }
+
+        #current-message {
+            font-size: 1.2rem;
+            background: var(--bg-color);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px dashed var(--secondary-color);
+            min-height: 50px;
+            word-wrap: break-word;
+            transition: all 0.3s;
+        }
+
+        #interaction-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        #message-input {
+            width: 100%;
+            padding: 1rem;
+            font-family: var(--font-body);
+            font-size: 1rem;
+            background-color: rgba(255,255,255,0.05);
+            border: 1px solid var(--secondary-color);
+            border-radius: 8px;
+            color: var(--text-color);
+            transition: all 0.3s;
+        }
+
+        #message-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+        }
+
+        #set-message-btn {
+            padding: 1rem;
+            font-family: var(--font-title);
+            font-size: 1.1rem;
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+        
+        #set-message-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 242, 255, 0.4);
+        }
+
+        #set-message-btn:disabled {
+            background-color: var(--secondary-color);
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        #status-log {
+            font-size: 0.85rem;
+            padding: 0.75rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            min-height: 25px;
+            text-align: center;
+        }
+
+    </style>
+</head>
+<body>
+    <!-- Canvas untuk Animasi 3D -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Kontainer Aplikasi -->
+    <div id="app-container">
+        <div class="glass-panel">
+            <header>
+                <h1>Pesan Digital</h1>
+                <div id="connection-status">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="connection-text">Menghubungkan ke Wallet...</span>
+                </div>
+            </header>
+
+            <section id="display-section">
+                <h2>Pesan Saat Ini di Blockchain:</h2>
+                <div id="current-message">Memuat pesan...</div>
+            </section>
+
+            <section id="interaction-section">
+                <input type="text" id="message-input" placeholder="Ketik pesan baru Anda...">
+                <button id="set-message-btn" disabled>Hubungkan Wallet Terlebih Dahulu</button>
+            </section>
+
+            <footer id="status-log">
+                Selamat datang! Silakan hubungkan wallet MetaMask Anda.
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // --- JavaScript Kompleks: 3D dan Logika Blockchain ---
+
+        // ===================================
+        // BAGIAN 1: KONTROL ANIMASI 3D (THREE.JS)
+        // ===================================
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({
+            canvas: document.getElementById('bg-canvas'),
+            antialias: true,
+        });
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        camera.position.z = 5;
+
+        // Geometri Partikel
+        const particleCount = 7000;
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        const color = new THREE.Color();
+
+        for (let i = 0; i < particleCount * 3; i++) {
+            positions[i] = (Math.random() - 0.5) * 20; // Sebar partikel
+            color.setHSL(Math.random(), 0.7, 0.6); // Warna-warni
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
+        }
+
+        const particlesGeometry = new THREE.BufferGeometry();
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.05,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+        });
+
+        const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particleSystem);
+
+        // Kontrol mouse
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX - window.innerWidth / 2) / 100;
+            mouseY = (event.clientY - window.innerHeight / 2) / 100;
+        });
+        
+        // Loop Animasi
+        const clock = new THREE.Clock();
+        function animate() {
+            const elapsedTime = clock.getElapsedTime();
+            
+            // Animasi partikel berputar
+            particleSystem.rotation.y = elapsedTime * 0.05;
+            
+            // Animasi kamera mengikuti mouse
+            camera.position.x += (mouseX - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Fungsi utilitas untuk memicu animasi saat transaksi
+        function triggerSendAnimation() {
+            const tl = new THREE.TimelineLite();
+            tl.to(particleSystem.rotation, 0.5, { z: particleSystem.rotation.z + 0.5, ease: Power2.easeOut });
+            tl.to(particleSystem.rotation, 0.5, { z: particleSystem.rotation.z, ease: Power2.easeIn });
+        }
+
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // =========================================
+        // BAGIAN 2: LOGIKA BLOCKCHAIN (ETHERS.JS)
+        // =========================================
+        const statusDot = document.getElementById('status-dot');
+        const connectionText = document.getElementById('connection-text');
+        const currentMessageDiv = document.getElementById('current-message');
+        const messageInput = document.getElementById('message-input');
+        const setBtn = document.getElementById('set-message-btn');
+        const statusLog = document.getElementById('status-log');
+        
+        let provider, signer, contract;
+        let contractInfo = {};
+
+        async function loadContractInfo() {
+            try {
+                const response = await fetch('./src/contract/contract-info.json');
+                if (!response.ok) {
+                    throw new Error("Gagal memuat info kontrak. Pastikan Anda sudah menjalankan 'npx hardhat run scripts/deploy.js'");
+                }
+                contractInfo = await response.json();
+            } catch (error) {
+                logStatus(`Error Kritis: ${error.message}`, true);
+                return false;
+            }
+            return true;
+        }
+        
+        async function connectWallet() {
+            logStatus("Mencoba menghubungkan ke MetaMask...");
+            if (typeof window.ethereum === 'undefined') {
+                logStatus("MetaMask tidak terdeteksi. Silakan install MetaMask.", true);
+                setBtn.disabled = true;
+                return;
+            }
+
+            try {
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+                const userAddress = await signer.getAddress();
+                
+                if (!(await loadContractInfo())) return;
+
+                contract = new ethers.Contract(contractInfo.address, contractInfo.abi, signer);
+
+                updateConnectionStatus(true, userAddress);
+                logStatus("Wallet terhubung. Siap berinteraksi.");
+                fetchCurrentMessage();
+
+            } catch (err) {
+                console.error(err);
+                logStatus("Gagal menghubungkan wallet. Silakan coba lagi.", true);
+                updateConnectionStatus(false);
+            }
+        }
+        
+        function updateConnectionStatus(isConnected, address = '') {
+            if (isConnected) {
+                statusDot.classList.add('connected');
+                const shortAddress = `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+                connectionText.textContent = `Terhubung: ${shortAddress}`;
+                setBtn.textContent = 'Kirim Pesan ke Blockchain';
+                setBtn.disabled = false;
+            } else {
+                statusDot.classList.remove('connected');
+                connectionText.textContent = 'Wallet Tidak Terhubung';
+                setBtn.textContent = 'Hubungkan Wallet Terlebih Dahulu';
+                setBtn.disabled = true;
+            }
+        }
+
+        async function fetchCurrentMessage() {
+            if (!contract) return;
+            logStatus("Mengambil pesan dari blockchain...");
+            currentMessageDiv.textContent = "Loading...";
+            try {
+                const message = await contract.textRaw();
+                currentMessageDiv.textContent = message === "" ? "[ Pesan masih kosong ]" : message;
+                logStatus("Pesan berhasil dimuat.");
+            } catch (error) {
+                console.error(error);
+                logStatus("Gagal mengambil pesan dari kontrak.", true);
+                currentMessageDiv.textContent = "Gagal memuat.";
+            }
+        }
+
+        async function handleSetMessage() {
+            if (!contract) {
+                logStatus("Kontrak tidak terinisialisasi.", true);
+                return;
+            }
+            const newMessage = messageInput.value;
+            if (newMessage.trim() === '') {
+                logStatus("Pesan tidak boleh kosong.", true);
+                return;
+            }
+
+            logStatus("Mempersiapkan transaksi...");
+            setBtn.disabled = true;
+            setBtn.textContent = "Mengirim...";
+
+            try {
+                // Memicu animasi 3D
+                triggerSendAnimation();
+
+                const tx = await contract.setText(newMessage);
+                logStatus(`Transaksi dikirim... Hash: ${tx.hash.substring(0, 10)}...`);
+                
+                await tx.wait(); // Menunggu transaksi dikonfirmasi
+                
+                logStatus("Transaksi berhasil! Pesan telah diubah di blockchain.");
+                fetchCurrentMessage(); // Ambil pesan terbaru
+                messageInput.value = ""; // Kosongkan input
+                
+            } catch (error) {
+                console.error(error);
+                const reason = error.reason || "Transaksi ditolak atau gagal.";
+                logStatus(`Error: ${reason}`, true);
+            } finally {
+                setBtn.disabled = false;
+                setBtn.textContent = 'Kirim Pesan ke Blockchain';
+            }
+        }
+
+        function logStatus(message, isError = false) {
+            statusLog.textContent = message;
+            statusLog.style.color = isError ? '#ff4d4d' : 'var(--text-color)';
+        }
+        
+        // Inisialisasi Aplikasi
+        window.addEventListener('DOMContentLoaded', () => {
+            setBtn.addEventListener('click', () => {
+                if (signer) {
+                    handleSetMessage();
+                } else {
+                    connectWallet();
+                }
+            });
+            // Coba hubungkan wallet saat halaman dimuat
+            connectWallet();
+        });
+
+    </script>
+</body>
+</html>
